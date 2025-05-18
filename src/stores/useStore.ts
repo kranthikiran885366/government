@@ -1,5 +1,17 @@
 import { create } from 'zustand';
-import { collection, query, onSnapshot, orderBy, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { 
+  collection, 
+  query, 
+  onSnapshot, 
+  orderBy, 
+  addDoc, 
+  updateDoc, 
+  doc, 
+  where,
+  getDocs,
+  Timestamp,
+  serverTimestamp
+} from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 interface State {
@@ -18,6 +30,10 @@ interface State {
   fetchAgriculturePrices: () => Promise<void>;
   fetchIssues: () => Promise<void>;
   fetchFeedback: () => Promise<void>;
+  addIssue: (issue: any) => Promise<void>;
+  addFeedback: (feedback: any) => Promise<void>;
+  updateIssueStatus: (issueId: string, status: string) => Promise<void>;
+  voteFeedback: (feedbackId: string, voteType: 'up' | 'down') => Promise<void>;
 }
 
 export const useStore = create<State>((set) => ({
@@ -37,6 +53,10 @@ export const useStore = create<State>((set) => ({
       (snapshot) => {
         const leaders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         set({ leaders });
+      },
+      (error) => {
+        console.error('Leaders subscription error:', error);
+        set({ error: error.message });
       }
     );
 
@@ -45,6 +65,10 @@ export const useStore = create<State>((set) => ({
       (snapshot) => {
         const projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         set({ projects });
+      },
+      (error) => {
+        console.error('Projects subscription error:', error);
+        set({ error: error.message });
       }
     );
 
@@ -53,6 +77,10 @@ export const useStore = create<State>((set) => ({
       (snapshot) => {
         const spending = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         set({ spending });
+      },
+      (error) => {
+        console.error('Spending subscription error:', error);
+        set({ error: error.message });
       }
     );
 
@@ -61,6 +89,10 @@ export const useStore = create<State>((set) => ({
       (snapshot) => {
         const agriculturePrices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         set({ agriculturePrices });
+      },
+      (error) => {
+        console.error('Agriculture prices subscription error:', error);
+        set({ error: error.message });
       }
     );
 
@@ -69,6 +101,10 @@ export const useStore = create<State>((set) => ({
       (snapshot) => {
         const issues = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         set({ issues });
+      },
+      (error) => {
+        console.error('Issues subscription error:', error);
+        set({ error: error.message });
       }
     );
 
@@ -77,6 +113,10 @@ export const useStore = create<State>((set) => ({
       (snapshot) => {
         const feedback = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         set({ feedback });
+      },
+      (error) => {
+        console.error('Feedback subscription error:', error);
+        set({ error: error.message });
       }
     );
 
@@ -95,11 +135,9 @@ export const useStore = create<State>((set) => ({
     try {
       set({ loading: true });
       const q = query(collection(db, 'leaders'), orderBy('createdAt', 'desc'));
-      const snapshot = await onSnapshot(q, (querySnapshot) => {
-        const leaders = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        set({ leaders, error: null });
-      });
-      return () => snapshot();
+      const querySnapshot = await getDocs(q);
+      const leaders = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      set({ leaders, error: null });
     } catch (error: any) {
       set({ error: error.message });
     } finally {
@@ -111,11 +149,9 @@ export const useStore = create<State>((set) => ({
     try {
       set({ loading: true });
       const q = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
-      const snapshot = await onSnapshot(q, (querySnapshot) => {
-        const projects = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        set({ projects, error: null });
-      });
-      return () => snapshot();
+      const querySnapshot = await getDocs(q);
+      const projects = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      set({ projects, error: null });
     } catch (error: any) {
       set({ error: error.message });
     } finally {
@@ -127,11 +163,9 @@ export const useStore = create<State>((set) => ({
     try {
       set({ loading: true });
       const q = query(collection(db, 'spending'), orderBy('date', 'desc'));
-      const snapshot = await onSnapshot(q, (querySnapshot) => {
-        const spending = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        set({ spending, error: null });
-      });
-      return () => snapshot();
+      const querySnapshot = await getDocs(q);
+      const spending = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      set({ spending, error: null });
     } catch (error: any) {
       set({ error: error.message });
     } finally {
@@ -143,11 +177,9 @@ export const useStore = create<State>((set) => ({
     try {
       set({ loading: true });
       const q = query(collection(db, 'agriculture_prices'), orderBy('updatedAt', 'desc'));
-      const snapshot = await onSnapshot(q, (querySnapshot) => {
-        const agriculturePrices = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        set({ agriculturePrices, error: null });
-      });
-      return () => snapshot();
+      const querySnapshot = await getDocs(q);
+      const agriculturePrices = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      set({ agriculturePrices, error: null });
     } catch (error: any) {
       set({ error: error.message });
     } finally {
@@ -159,11 +191,9 @@ export const useStore = create<State>((set) => ({
     try {
       set({ loading: true });
       const q = query(collection(db, 'issues'), orderBy('createdAt', 'desc'));
-      const snapshot = await onSnapshot(q, (querySnapshot) => {
-        const issues = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        set({ issues, error: null });
-      });
-      return () => snapshot();
+      const querySnapshot = await getDocs(q);
+      const issues = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      set({ issues, error: null });
     } catch (error: any) {
       set({ error: error.message });
     } finally {
@@ -175,15 +205,78 @@ export const useStore = create<State>((set) => ({
     try {
       set({ loading: true });
       const q = query(collection(db, 'feedback'), orderBy('createdAt', 'desc'));
-      const snapshot = await onSnapshot(q, (querySnapshot) => {
-        const feedback = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        set({ feedback, error: null });
-      });
-      return () => snapshot();
+      const querySnapshot = await getDocs(q);
+      const feedback = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      set({ feedback, error: null });
     } catch (error: any) {
       set({ error: error.message });
     } finally {
       set({ loading: false });
     }
   },
+
+  addIssue: async (issue) => {
+    try {
+      set({ loading: true });
+      await addDoc(collection(db, 'issues'), {
+        ...issue,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        status: 'pending'
+      });
+      set({ error: null });
+    } catch (error: any) {
+      set({ error: error.message });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  addFeedback: async (feedback) => {
+    try {
+      set({ loading: true });
+      await addDoc(collection(db, 'feedback'), {
+        ...feedback,
+        createdAt: serverTimestamp(),
+        upvotes: 0,
+        downvotes: 0
+      });
+      set({ error: null });
+    } catch (error: any) {
+      set({ error: error.message });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  updateIssueStatus: async (issueId, status) => {
+    try {
+      set({ loading: true });
+      const issueRef = doc(db, 'issues', issueId);
+      await updateDoc(issueRef, {
+        status,
+        updatedAt: serverTimestamp()
+      });
+      set({ error: null });
+    } catch (error: any) {
+      set({ error: error.message });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  voteFeedback: async (feedbackId, voteType) => {
+    try {
+      set({ loading: true });
+      const feedbackRef = doc(db, 'feedback', feedbackId);
+      await updateDoc(feedbackRef, {
+        [voteType === 'up' ? 'upvotes' : 'downvotes']: increment(1)
+      });
+      set({ error: null });
+    } catch (error: any) {
+      set({ error: error.message });
+    } finally {
+      set({ loading: false });
+    }
+  }
 }));
