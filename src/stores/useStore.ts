@@ -14,6 +14,7 @@ import {
   increment
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { analyticsEngine } from '../lib/analytics';
 
 interface State {
   leaders: any[];
@@ -22,6 +23,10 @@ interface State {
   agriculturePrices: any[];
   issues: any[];
   feedback: any[];
+  analytics: {
+    insights: any;
+    loading: boolean;
+  };
   loading: boolean;
   error: string | null;
   subscribeToUpdates: () => void;
@@ -31,24 +36,31 @@ interface State {
   fetchAgriculturePrices: () => Promise<void>;
   fetchIssues: () => Promise<void>;
   fetchFeedback: () => Promise<void>;
+  fetchAnalytics: () => Promise<void>;
   addIssue: (issue: any) => Promise<void>;
   addFeedback: (feedback: any) => Promise<void>;
   updateIssueStatus: (issueId: string, status: string) => Promise<void>;
   voteFeedback: (feedbackId: string, voteType: 'up' | 'down') => Promise<void>;
+  predictIssueResolution: (issue: any) => Promise<any>;
+  generateReport: () => Promise<any>;
 }
 
-export const useStore = create<State>((set) => ({
+export const useStore = create<State>((set, get) => ({
   leaders: [],
   projects: [],
   spending: [],
   agriculturePrices: [],
   issues: [],
   feedback: [],
+  analytics: {
+    insights: null,
+    loading: false
+  },
   loading: false,
   error: null,
 
   subscribeToUpdates: () => {
-    // Subscribe to real-time updates from Firestore
+    // Existing subscriptions...
     const unsubLeaders = onSnapshot(
       query(collection(db, 'leaders'), orderBy('createdAt', 'desc')),
       (snapshot) => {
@@ -99,9 +111,10 @@ export const useStore = create<State>((set) => ({
 
     const unsubIssues = onSnapshot(
       query(collection(db, 'issues'), orderBy('createdAt', 'desc')),
-      (snapshot) => {
+      async (snapshot) => {
         const issues = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        set({ issues });
+        const analyzedIssues = await analyticsEngine.analyzeIssuesSentiment(issues);
+        set({ issues: analyzedIssues });
       },
       (error) => {
         console.error('Issues subscription error:', error);
@@ -132,6 +145,59 @@ export const useStore = create<State>((set) => ({
     };
   },
 
+  fetchAnalytics: async () => {
+    try {
+      set(state => ({ analytics: { ...state.analytics, loading: true } }));
+      const insights = await analyticsEngine.generateInsights();
+      set(state => ({ 
+        analytics: { 
+          insights,
+          loading: false
+        }
+      }));
+    } catch (error: any) {
+      console.error('Analytics generation error:', error);
+      set(state => ({ 
+        analytics: { 
+          ...state.analytics,
+          loading: false
+        },
+        error: error.message 
+      }));
+    }
+  },
+
+  predictIssueResolution: async (issue) => {
+    try {
+      return await analyticsEngine.predictIssueResolutionTime(issue);
+    } catch (error: any) {
+      console.error('Prediction error:', error);
+      return null;
+    }
+  },
+
+  generateReport: async () => {
+    const state = get();
+    const report = {
+      timestamp: new Date().toISOString(),
+      summary: {
+        totalIssues: state.issues.length,
+        resolvedIssues: state.issues.filter(i => i.status === 'resolved').length,
+        totalProjects: state.projects.length,
+        totalSpending: state.spending.reduce((sum, item) => sum + item.amount, 0),
+      },
+      analytics: state.analytics.insights,
+      trends: {
+        issues: await analyticsEngine.analyzeTrends(state.issues),
+        spending: state.spending.slice(-30), // Last 30 days
+        feedback: state.feedback.slice(-30),
+      }
+    };
+
+    return report;
+  },
+
+  // Existing methods...
   fetchLeaders: async () => {
     try {
       set({ loading: true });
@@ -219,8 +285,10 @@ export const useStore = create<State>((set) => ({
   addIssue: async (issue) => {
     try {
       set({ loading: true });
+      const prediction = await analyticsEngine.predictIssueResolutionTime(issue);
       await addDoc(collection(db, 'issues'), {
         ...issue,
+        predictedResolutionDays: prediction?.estimatedDays,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         status: 'pending'
