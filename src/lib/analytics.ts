@@ -1,10 +1,6 @@
 import * as tf from '@tensorflow/tfjs';
-import natural from 'natural';
 import { db } from './firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-
-const tokenizer = new natural.WordTokenizer();
-const classifier = new natural.BayesClassifier();
 
 export class AnalyticsEngine {
   private static instance: AnalyticsEngine;
@@ -38,12 +34,22 @@ export class AnalyticsEngine {
   }
 
   async analyzeIssuesSentiment(issues: any[]) {
+    // Simplified sentiment analysis using basic keyword matching
+    const positiveWords = new Set(['good', 'great', 'excellent', 'positive', 'resolved', 'success']);
+    const negativeWords = new Set(['bad', 'poor', 'negative', 'failure', 'problem', 'issue']);
+
     return issues.map(issue => {
-      const tokens = tokenizer.tokenize(issue.description);
-      const sentiment = natural.SentimentAnalyzer.analyze(tokens);
+      const words = issue.description.toLowerCase().split(/\s+/);
+      let score = 0;
+      
+      words.forEach(word => {
+        if (positiveWords.has(word)) score++;
+        if (negativeWords.has(word)) score--;
+      });
+
       return {
         ...issue,
-        sentiment: sentiment > 0 ? 'positive' : sentiment < 0 ? 'negative' : 'neutral'
+        sentiment: score > 0 ? 'positive' : score < 0 ? 'negative' : 'neutral'
       };
     });
   }
